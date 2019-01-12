@@ -1,0 +1,231 @@
+-- Los datos enviados desde el leap moion:
+-- *Distancias en milimetros
+-- *Tiempo en microsegundos
+
+-------SCRIPT DEL DEDO INDICE-----
+
+--CONSTANTES--
+X = 1
+Y = 2
+Z = 3
+
+function calc_angle(v1,v2,origin,type)
+    --obtenemos vectores directores
+    local vd1 = {v1[1]-origin[1], v1[2]-origin[2], v1[3]-origin[3]}
+    local vd2 = {v2[1]-origin[1], v2[2]-origin[2], v2[3]-origin[3]}
+    
+    --obtenemos las magnitudes de los vectores
+    local magn_v1 = calc_dist(v1,origin)
+    local magn_v2 = calc_dist(v2,origin)
+    
+    --se calcula el angulo
+    local alfa = vd1[1]*vd2[1]
+    alfa = alfa+vd1[2]*vd2[2]
+    alfa = alfa+vd1[3]*vd2[3]
+    alfa = alfa/(magn_v1*magn_v2)
+    --retorna el angulo en grados sexagesimales
+    if(type == 1)then
+        return math.deg(math.acos(alfa)) 
+    end
+    --retorna el angulo en radianes
+    if (type == 2)then 
+        return math.acos(alfa)
+    end
+end
+
+function calc_dist(v1,v2)
+    local aux4 = math.pow(v2[1]-v1[1],2)+math.pow(v2[2]-v1[2],2)+math.pow(v2[3]-v1[3],2)
+    return math.sqrt(aux4)
+end
+
+function calc_point_reference(index_meta, index_prox)
+    --vector director
+    vd[1] = index_prox[1]-index_meta[1]
+    vd[2] = index_prox[2]-index_meta[2]
+    vd[3] = index_prox[3]-index_meta[3]
+    
+    --distance = calc_dist(index_prox,index_meta)
+    distance=1
+    pNew[1] = index_prox[1] + distance*vd[1]
+    pNew[2] = index_prox[2] + distance*vd[2]
+    pNew[3] = index_prox[3] + distance*vd[3]
+    return pNew
+end
+
+function ini_variables()
+    ----------VARIABLES DE CONTROL--------
+    --[[unidades de medida
+    [1] microsegundo 
+    [2] milisegundo
+    [3] centisegundo
+    [4] decisegundo
+    [5] segundo
+    [6] minuto
+    [7] hora
+    ]]
+    measure_t =5
+    --[[
+    [1] grados
+    [2] radianes    
+    ]]
+    measure_a = 2
+    --umbral de movimiento angular local
+    --(recomendado) grados: 1 radianes: 0.0174533
+    umbral = .0087
+    --proporcion de velocidad
+    proportion = .6
+    --Tamaño de las tramas de informacion
+    --valor minimo: 2
+    size_set_msg = 30 
+    --controla la taza de mensajes a ser procesados, provenientes del topico de ros
+    rate_msg_ros = 1
+    --lleva el conteo de mensajes almacenados en las tramas
+    count = 0
+    ----------VARIABLES  DE PROCESAMIENTO
+    us_to_x = {1,1000,10000,100000,1000000,1000000*60,1000000*3600}
+    s_to_x = {0.000001,0.001,0.01,0.1,1,60,3600}
+    control = 0
+    vd = {0,0,0}
+    pNew={0,0,0}
+
+    -----------VARIABLES DE POSICION--------
+    --se inicializan las arreglos que guardan las posiciones de los dedos
+    index_pos,thumb_pos = {0,0},{0,0}
+    index_pos[1], thumb_pos[1] = {0,0,0},{0,0,0}
+    index_pos[2], thumb_pos[2] = {0,0,0},{0,0,0}
+    origin_finger = {0,0,0}
+    pos_hand = {0,0,0}
+
+    -------------TRAMAS---------------------
+    --trama de angulos locales, globales y velocidad angular
+    finger_angle, velocity_a, global_angle = {}, {}, {}
+    for i=1,size_set_msg,1 do
+        velocity_a[i]=0
+        finger_angle[i]=0
+        global_angle[i]=0
+    end
+    --trama de tiempo
+    time_t = {}
+    for i=1,size_set_msg,1 do
+        time_t[i] = 0
+    end
+    time_aux={0,0}
+end
+
+function leap_msg(msg)
+    --control de llenado de tramas
+    if (count == size_set_msg)then
+        count = 1
+    else
+        count = count + 1
+    end
+    
+    if control%rate_msg_ros == 0 then
+        if (count%2 == 0)then 
+            --obtencion de posiciones
+            index_pos[2][X] = msg.index_tip.x
+            index_pos[2][Y] = msg.index_tip.y
+            index_pos[2][Z] = msg.index_tip.z
+
+            thumb_pos[2] = calc_point_reference({msg.index_metacarpal.x,msg.index_metacarpal.y,msg.index_metacarpal.z},{msg.index_proximal.x, msg.index_proximal.y, msg.index_proximal.z})
+            
+            origin_finger[X] = msg.index_metacarpal.x
+            origin_finger[Y] = msg.index_metacarpal.y
+            origin_finger[Z] = msg.index_metacarpal.z
+            
+            --tiempo
+            time_aux[2] = msg.time/us_to_x[measure_t]
+            time_t[count] = time_aux[2]-time_aux[1]
+
+            --se calculan los angulos globales y locales
+            global_angle[count] = calc_angle(index_pos[2], thumb_pos[2], origin_finger,measure_a)
+            finger_angle[count] = calc_angle(index_pos[2], index_pos[1], origin_finger,measure_a)
+            
+            --calculo de la velocidad
+            velocity_a[count] = (finger_angle[count]/time_t[count])*proportion
+
+            --suavisado del movimiento
+            if(finger_angle[count] > umbral)then
+                angle_base = global_angle[count]
+                --direccion de la velocidad
+                if(global_angle[count] > global_angle[count-1])then
+                    velocity_a[count] = velocity_a[count]*-1
+                end
+            else --se suavisa el movimiento al eliminar pequenos movimientos angulares de los dedos
+                velocity_a[count] = 0
+            end
+        else
+            --obtencion de posiciones
+            index_pos[1][X] = msg.index_tip.x
+            index_pos[1][Y] = msg.index_tip.y
+            index_pos[1][Z] = msg.index_tip.z
+            
+            thumb_pos[1] = calc_point_reference({msg.index_metacarpal.x,msg.index_metacarpal.y,msg.index_metacarpal.z},
+                            {msg.index_proximal.x, msg.index_proximal.y, msg.index_proximal.z})
+            
+            origin_finger[X] = msg.index_metacarpal.x
+            origin_finger[Y] = msg.index_metacarpal.y
+            origin_finger[Z] = msg.index_metacarpal.z
+            
+            --tiempo
+            time_aux[1] = msg.time/us_to_x[measure_t]
+            time_t[count] = time_aux[1]-time_aux[2]
+            
+            --se calculan angulos globales y locales
+            global_angle[count] = calc_angle(index_pos[1], thumb_pos[1], origin_finger,measure_a)
+            finger_angle[count] = calc_angle(index_pos[1], index_pos[2], origin_finger,measure_a)
+            
+            --calculo de la velocidad
+            velocity_a[count] = (finger_angle[count]/(time_t[count]))*proportion
+            
+            --suavisado del movimiento
+            if(finger_angle[count] > umbral)then
+                angle_base = global_angle[count]
+                if(count == 1)then
+                    --direccion de la velocidad
+                    if(global_angle[count] > global_angle[size_set_msg])then
+                        velocity_a[count] = velocity_a[count]*-1
+                    end
+                else
+                    --direccion de la velocidad
+                    if(global_angle[count] > global_angle[count-1])then
+                        velocity_a[count] = velocity_a[count]*-1
+                    end
+                end
+
+            else --se suavisa el movimiento al eliminar pequenos movimientos angulares de los dedos
+                velocity_a[count] = 0
+            end
+        end
+    end
+    --control de procesamiento
+    control=control+1
+end
+
+
+function sysCall_init()
+    ini_variables()
+    ts={0,0}
+    aux = {0,0}
+    k=0
+    sub=simROS.subscribe('/leapmotion/data', 'leap_motion/leapros', 'leap_msg')
+    j2=sim.getObjectHandle("JacoHand_fingers12_motor1")
+    j3=sim.getObjectHandle("JacoHand_fingers12_motor2")
+   
+end
+
+function sysCall_actuation()
+    if (control ~= 0) then
+        sim.addStatusbarMessage("velocidad "..velocity_a[count])
+        sim.setJointTargetVelocity(j2,velocity_a[count])
+        sim.setJointTargetVelocity(j3,velocity_a[count])
+    end
+end
+
+function sysCall_sensing()
+
+end
+
+function sysCall_cleanup()
+    simROS.shutdownSubscriber(sub)
+end
