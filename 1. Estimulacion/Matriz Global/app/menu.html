@@ -1,0 +1,120 @@
+<div class="content-menu">
+
+    <!-- Protocolos -->
+    <div class="menu-row">
+        <span class="btn">P300</span>
+        <span class="btn">Mentales</span>
+        <span class="btn">Musica</span>
+    </div>
+    <!--  Protocolos -->
+
+    <!-- Fuera de Linea -->
+    <div class="menu-row">
+        <span class="btn">En línea</span>
+        <span class="btn">Fuera de línea</span>
+    </div>
+    <!-- Fin Fuera de Linea -->
+
+    <!-- Opciones -->
+    <div class="menu-row">
+        <span>Parametros de entrada: </span>
+    </div>
+    <!-- Fin Opciones -->
+
+</div>
+
+
+
+<!-- Configuraciones Cyton -->
+<h1>Configuraciones Cyton</h1>
+<span>Puertos</span>
+<select></select>
+<button onclick="RefreshPorts();">Refrescar</button>
+<input type="checkbox"/>
+<span>Simular</span>
+<br>
+<br>
+<button onclick="ConectarCyton();">Iniciar</button>
+<button onclick="">Detener</button>
+
+<!-- Fin Configuraciones Cyton -->
+
+<!-- Protocolos -->
+<h1>Protocolos</h1>
+<button onclick="ShowP300();">P300</button>
+<button onclick="ShowTareas();">Tareas Mentales</button>
+<!-- Fin Protocolos -->
+
+
+
+
+<!-- Esto es Javascript puro -->
+<script>
+
+    var menu = document.getElementById("MenuBCI");
+    var P300 = document.getElementById("ProtocoloP300");
+    var Tareas = document.getElementById("ProtocoloTareasMentales");
+
+    function ShowP300()
+    {
+        menu.style.display = "none";
+        P300.style.display = "block";
+        Tareas.style.display = "none";
+        P300start();
+        StartStreaming(onSampleP300);
+    }
+
+    function ShowTareas()
+    {
+        menu.style.display = "none";
+        P300.style.display = "none";
+        Tareas.style.display = "block";
+    }
+
+    function RefreshPorts()
+    {
+        var ports = GetPortNames();
+    }
+
+    function ConectarCyton() 
+    {
+        ConnectCyton(true, undefined, MostrarMsg);
+    }
+
+    function MostrarMsg (msg)
+    {
+        if(msg == true)
+        {
+            alert("conectado");
+        }
+
+        if(msg == false)
+        {
+            alert("no conectado");
+        }
+    }
+</script>
+
+<style>
+
+.content-menu {
+    margin: 0 auto;
+    width: 100%;
+}
+
+.content-menu .menu-row {
+    float: left;
+    width: 33%;
+}
+
+.btn {
+    display: block;
+    width: 100px;
+    height: 50px;
+    border: 1px solid orange;
+    text-align: center;
+    line-height: 50px;
+    margin: 10px;
+}
+
+</style>
